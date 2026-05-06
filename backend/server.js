@@ -26,6 +26,7 @@ const tripPlanner = require('./routes/tripPlanner');
 const chatbot = require('./routes/chatbot');
 const reviews = require('./routes/reviews');
 const admin = require('./routes/admin');
+const reports = require('./routes/reports');
 
 // Connect to database
 connectDB();
@@ -70,6 +71,7 @@ app.use('/api/trip-planner', tripPlanner);
 app.use('/api/chatbot', chatbot);
 app.use('/api/reviews', reviews);
 app.use('/api/admin', admin);
+app.use('/api/reports', reports);
 
 // Static folder (for uploads if any)
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
@@ -92,9 +94,17 @@ server.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
 });
 
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n❌ Port ${PORT} is already in use.`);
+    console.error(`   Run this to free it: netstat -ano | findstr :${PORT}`);
+    console.error(`   Then: taskkill /PID <PID> /F\n`);
+    process.exit(1);
+  }
+});
+
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err, promise) => {
   console.log(`Error: ${err.message}`);
-  // Close server & exit process
   // server.close(() => process.exit(1));
 });

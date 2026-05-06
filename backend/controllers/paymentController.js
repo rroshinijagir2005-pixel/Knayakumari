@@ -43,6 +43,8 @@ exports.createOrder = asyncHandler(async (req, res, next) => {
   }
 });
 
+const whatsappService = require('../services/whatsappService');
+
 // @desc    Verify Razorpay payment signature
 // @route   POST /api/payment/verify
 // @access  Private
@@ -70,7 +72,7 @@ exports.verifyPayment = asyncHandler(async (req, res, next) => {
 
   if (isAuthentic) {
     // 1. Find the booking
-    const booking = await Booking.findById(bookingId);
+    const booking = await Booking.findById(bookingId).populate('user', 'name phone');
     if (!booking) {
       return next(new ErrorResponse('Booking not found', 404));
     }
@@ -99,6 +101,21 @@ exports.verifyPayment = asyncHandler(async (req, res, next) => {
         razorpayPaymentId: booking.razorpayPaymentId,
         razorpaySignature: razorpay_signature,
         status: 'captured',
+      });
+    }
+
+    // 4. Send WhatsApp Notification
+    if (booking.whatsappConfirmation) {
+      whatsappService.sendWhatsAppConfirmation({
+        bookingId: booking._id.toString(),
+        guestName: booking.user?.name || 'Guest',
+        phone: req.body.phone || '+910000000000', // Assuming phone is passed or available on user
+        hotelName: booking.itemName,
+        checkIn: new Date(booking.checkIn).toLocaleDateString(),
+        checkOut: new Date(booking.checkOut).toLocaleDateString(),
+        paymentStatus: 'PAID',
+        mapLink: 'https://maps.google.com/?q=' + encodeURIComponent(booking.itemLocation),
+        hotelContact: 'See booking details'
       });
     }
 

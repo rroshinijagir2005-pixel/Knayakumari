@@ -6,11 +6,16 @@ const {
   updateAccommodation,
   deleteAccommodation,
   getAccommodationsInRadius,
+  checkDuplicates,
+  getStaleListings
 } = require('../controllers/accommodationController');
 
 const router = express.Router();
 
 const { protect, authorize } = require('../middleware/auth');
+
+router.get('/admin/duplicates', protect, authorize('admin'), checkDuplicates);
+router.get('/admin/stale', protect, authorize('admin'), getStaleListings);
 
 router.route('/')
   .get(getAccommodations)

@@ -23,8 +23,14 @@ exports.getAccommodations = asyncHandler(async (req, res, next) => {
   // Create operators ($gt, $gte, etc)
   queryStr = queryStr.replace(/\b(gt|gte|lt|lte|in)\b/g, match => `$${match}`);
 
-  // Finding resource
-  query = Accommodation.find(JSON.parse(queryStr));
+  // Finding resource - filter out Permanently Closed and Suspended unless admin
+  let filterObj = JSON.parse(queryStr);
+  
+  if (!req.user || req.user.role !== 'admin') {
+    filterObj.status = { $nin: ['Permanently Closed', 'Suspended', 'Under Review'] };
+  }
+
+  query = Accommodation.find(filterObj);
 
   // Search filter
   if (req.query.search) {
@@ -181,3 +187,60 @@ exports.getAccommodationsInRadius = asyncHandler(async (req, res, next) => {
     data: accommodations
   });
 });
+
+// @desc    Check for duplicate listings
+// @route   GET /api/accommodations/admin/duplicates
+// @access  Private (Admin)
+exports.checkDuplicates = asyncHandler(async (req, res, next) => {
+  // Simple heuristic: group by name (lowercase) or exact address
+  const accommodations = await Accommodation.find().select('name address location type contactPhone');
+  
+  const duplicates = [];
+  const map = new Map();
+
+  accommodations.forEach(acc => {
+    // Normalize keys
+    const nameKey = acc.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const phoneKey = acc.contactPhone ? acc.contactPhone.replace(/[^0-9]/g, '') : null;
+    
+    // Check by name
+    if (map.has(nameKey)) {
+      duplicates.push({ type: 'Name Match', current: acc, existing: map.get(nameKey) });
+    } else {
+      map.set(nameKey, acc);
+    }
+    
+    // Check by phone
+    if (phoneKey) {
+      if (map.has(`phone_${phoneKey}`)) {
+        duplicates.push({ type: 'Phone Match', current: acc, existing: map.get(`phone_${phoneKey}`) });
+      } else {
+        map.set(`phone_${phoneKey}`, acc);
+      }
+    }
+  });
+
+  res.status(200).json({
+    success: true,
+    count: duplicates.length,
+    data: duplicates
+  });
+});
+
+// @desc    Get stale listings (not updated in 90 days)
+// @route   GET /api/accommodations/admin/stale
+// @access  Private (Admin)
+exports.getStaleListings = asyncHandler(async (req, res, next) => {
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  
+  const staleListings = await Accommodation.find({
+    updatedAt: { $lt: ninetyDaysAgo }
+  });
+
+  res.status(200).json({
+    success: true,
+    count: staleListings.length,
+    data: staleListings
+  });
+});
+
